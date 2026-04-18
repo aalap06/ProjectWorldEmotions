@@ -332,6 +332,17 @@ def _draw_flat_map(ax_map, states):
             linewidth=0, aspect="auto", alpha=0.10, zorder=3)
         ax_map.set_xlim(-180, 180);  ax_map.set_ylim(-60, 85)
 
+    # Thin emotion-colored borders (no halo/glow — just a crisp line)
+    core_rings, core_colors = [], []
+    for idx, nc in zip(tracked_idx, neon_colors):
+        for ring in COUNTRY_RINGS.get(world.iloc[idx]["NAME"], []):
+            core_rings.append(ring)
+            core_colors.append(nc)
+    if core_rings:
+        ax_map.add_collection(LineCollection(
+            core_rings, colors=core_colors,
+            linewidths=0.8, alpha=0.90, zorder=4, capstyle="round", joinstyle="round"))
+
     xs_list, ys_list, colors_list = [], [], []
     for _, row in world.iterrows():
         cid = next((c for c in states if NAME_MAP.get(c, c) == row["NAME"]), None)
