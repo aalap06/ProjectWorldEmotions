@@ -1,0 +1,51 @@
+# requirements.txt
+matplotlib
+numpy
+geopandas
+imageio
+imageio-ffmpeg
+contextily
+
+# ─────────────────────────────────────────────────────────────────
+#  SETUP INSTRUCTIONS
+# ─────────────────────────────────────────────────────────────────
+#
+#  1. Install Python dependencies:
+#       pip install matplotlib numpy
+#
+#  2. Install ffmpeg (for video export):
+#       Windows : https://ffmpeg.org/download.html
+#       Mac     : brew install ffmpeg
+#       Linux   : sudo apt install ffmpeg
+#
+#  3. Add your Anthropic API key in news_parser.py:
+#       API_KEY = "sk-ant-..."
+#
+#     Without a key, the simulator uses keyword-based fallback events.
+#     Get your key at: https://console.anthropic.com
+#
+#  4. Edit your weekly news headlines in main.py:
+#       WEEKLY_NEWS = [
+#           "Your headline here",
+#           ...
+#       ]
+#
+#  5. Run:
+#       python main.py
+#
+#  Output:
+#     - /frames/          PNG frames of each day
+#     - world_emotion.mp4 Final video ready to post
+#
+# ─────────────────────────────────────────────────────────────────
+#  FILE STRUCTURE
+# ─────────────────────────────────────────────────────────────────
+#
+#  world_emotion_sim/
+#  ├── countries.py      Country data + neighbor connections
+#  ├── emotions.py       Emotion configs (spread, decay, happiness weight)
+#  ├── simulation.py     Core tick logic — spreading + decay
+#  ├── news_parser.py    Claude API integration — headline → emotion deltas
+#  ├── renderer.py       Matplotlib visualization
+#  ├── main.py           Entry point — runs everything, exports video
+#  └── requirements.txt  This file
