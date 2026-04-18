@@ -3,6 +3,8 @@
 
 import os
 import json
+import shutil
+import multiprocessing
 import numpy as np
 import imageio.v2 as imageio
 
@@ -12,6 +14,14 @@ from baseline import get_baseline_states, HAPPINESS_SCORES
 from news_parser import parse_news
 from renderer import render_frame, get_start_longitude
 from countries import COUNTRIES
+
+
+# ── Top-level worker (must be module-level for multiprocessing pickling) ──────
+def _render_worker(args):
+    states, tick, h_val, news_log, lon, save_path, news_pos, news_neg = args
+    render_frame(states, tick, [h_val], news_log,
+                 central_lon=lon, save_path=save_path,
+                 news_positive=news_pos, news_negative=news_neg)
 
 # ─────────────────────────────────────────────
 #  CONFIGURATION
@@ -194,7 +204,7 @@ def main():
 
         start_states = {cid: dict(emo) for cid, emo in states.items()}
 
-        # Most positively / negatively affected country by this headline
+        # Ranked most positively / negatively affected countries by this headline
         _pos_scores, _neg_scores = {}, {}
         for _e in affected:
             _cid = _e["country"]
@@ -206,8 +216,11 @@ def main():
                     _pos_scores[_cid] = _pos_scores.get(_cid, 0.0) + max(0.0, _delta)
                 elif _emo in ("fear", "anger", "sadness", "anxiety"):
                     _neg_scores[_cid] = _neg_scores.get(_cid, 0.0) + max(0.0, _delta)
-        news_positive = max(_pos_scores, key=_pos_scores.get) if _pos_scores else None
-        news_negative = max(_neg_scores, key=_neg_scores.get) if _neg_scores else None
+        # Only put a country in the list where its net impact is dominant
+        news_positive = [c for c in sorted(_pos_scores, key=_pos_scores.get, reverse=True)
+                         if _pos_scores.get(c, 0) > _neg_scores.get(c, 0)]
+        news_negative = [c for c in sorted(_neg_scores, key=_neg_scores.get, reverse=True)
+                         if _neg_scores.get(c, 0) >= _pos_scores.get(c, 0)]
 
         # Globe rotation: start at most-affected country, ease 360° eastward
         start_lon = get_start_longitude(target_states, start_states)
@@ -218,42 +231,53 @@ def main():
 
         _kw = dict(news_positive=news_positive, news_negative=news_negative)
 
-        # ── INTRO: hold at start_lon ──────────────────────────────────────
-        for _ in range(INTRO_FRAMES):
-            tick       = (current_day - 1) * 24
-            frame_path = os.path.join(FRAMES_DIR, f"frame_{frame_index:04d}.png")
-            render_frame(states, tick, happiness_history, news_log,
-                         central_lon=start_lon, save_path=frame_path, **_kw)
+        # ── INTRO: render once, copy the rest ────────────────────────────
+        intro_tick  = (current_day - 1) * 24
+        intro_path  = os.path.join(FRAMES_DIR, f"frame_{frame_index:04d}.png")
+        render_frame(states, intro_tick, happiness_history, news_log,
+                     central_lon=start_lon, save_path=intro_path, **_kw)
+        frame_index += 1
+        for _ in range(INTRO_FRAMES - 1):
+            dst = os.path.join(FRAMES_DIR, f"frame_{frame_index:04d}.png")
+            shutil.copy2(intro_path, dst)
             frame_index += 1
 
-        # ── ANIMATION: interpolate states + rotate globe ──────────────────
+        # ── ANIMATION: pre-compute all args, render in parallel ───────────
+        anim_args  = []
+        anim_h_vals = []
         for f in range(ANIMATION_FRAMES):
             t_lin = f / (ANIMATION_FRAMES - 1) if ANIMATION_FRAMES > 1 else 1.0
-            t_emo = t_lin
             t_rot = _ease(t_lin)
-
-            current_states = {
-                cid: {
-                    e: start_states[cid][e] + (target_states[cid][e] - start_states[cid][e]) * t_emo
-                    for e in EMOTION_KEYS
-                }
+            cur_states = {
+                cid: {e: start_states[cid][e]
+                         + (target_states[cid][e] - start_states[cid][e]) * t_lin
+                      for e in EMOTION_KEYS}
                 for cid in states
             }
+            h_val = compute_happiness(cur_states)
+            anim_h_vals.append(h_val)
             lon  = start_lon + t_rot * TOTAL_ROTATION
             tick = (current_day - 1) * 24 + int(t_lin * 23)
+            fp   = os.path.join(FRAMES_DIR, f"frame_{frame_index + f:04d}.png")
+            anim_args.append((cur_states, tick, h_val, news_log, lon, fp,
+                              news_positive, news_negative))
 
-            happiness_history.append(compute_happiness(current_states))
-            frame_path = os.path.join(FRAMES_DIR, f"frame_{frame_index:04d}.png")
-            render_frame(current_states, tick, happiness_history, news_log,
-                         central_lon=lon, save_path=frame_path, **_kw)
-            frame_index += 1
+        happiness_history.extend(anim_h_vals)
 
-        # ── OUTRO: hold at final_lon ──────────────────────────────────────
-        for _ in range(OUTRO_FRAMES):
-            tick       = current_day * 24 - 1
-            frame_path = os.path.join(FRAMES_DIR, f"frame_{frame_index:04d}.png")
-            render_frame(target_states, tick, happiness_history, news_log,
-                         central_lon=final_lon, save_path=frame_path, **_kw)
+        n_workers = min(multiprocessing.cpu_count(), len(anim_args))
+        with multiprocessing.Pool(processes=n_workers) as pool:
+            pool.map(_render_worker, anim_args)
+        frame_index += ANIMATION_FRAMES
+
+        # ── OUTRO: render once, copy the rest ────────────────────────────
+        outro_tick = current_day * 24 - 1
+        outro_path = os.path.join(FRAMES_DIR, f"frame_{frame_index:04d}.png")
+        render_frame(target_states, outro_tick, happiness_history, news_log,
+                     central_lon=final_lon, save_path=outro_path, **_kw)
+        frame_index += 1
+        for _ in range(OUTRO_FRAMES - 1):
+            dst = os.path.join(FRAMES_DIR, f"frame_{frame_index:04d}.png")
+            shutil.copy2(outro_path, dst)
             frame_index += 1
 
         states = target_states

@@ -8,14 +8,14 @@
 EMOTIONS = {
     "fear":    {
         "label":             "Fear",
-        "color":             "#8B0000",   # dark red
+        "color":             "#CC0000",   # red
         "spread_rate":       0.35/6,     # spreads fast — panic is contagious
         "decay_rate":        0.04/6,     # lingers long
         "happiness_weight":  -0.8,
     },
     "anger":   {
         "label":             "Anger",
-        "color":             "#FF7700",   # orange
+        "color":             "#CCAA00",   # golden yellow
         "spread_rate":       0.30/6,     # spreads fast
         "decay_rate":        0.08/6,     # fades quicker than fear
         "happiness_weight":  -0.7,
@@ -36,14 +36,14 @@ EMOTIONS = {
     },
     "hope":    {
         "label":             "Hope",
-        "color":             "#16A34A",   # green
+        "color":             "#C8C8E8",   # near-white lavender
         "spread_rate":       0.10/6,     # hard to spread
         "decay_rate":        0.05/6,     # fades at medium rate
         "happiness_weight":  +0.9,
     },
     "joy":     {
         "label":             "Joy",
-        "color":             "#EAB308",   # yellow
+        "color":             "#00AA44",   # green
         "spread_rate":       0.08/6,     # hardest to spread
         "decay_rate":        0.10/6,     # fades fastest — joy is fragile
         "happiness_weight":  +1.0,

@@ -36,19 +36,27 @@ DOT_SIZE = 1.5
 SRC_CRS  = ccrs.PlateCarree()
 
 # ── Layout ────────────────────────────────────────────────────────────────────
-_TITLE_AX   = [0.03, 0.957, 0.94, 0.040]
+# Instagram Reels safe zones:
+#   _NT  = 10% top    (notch + Reels header UI)
+#   _M   = 6%  sides  (rounded corners + Instagram side UI)
+_NT  = 0.10
+_M   = 0.06
+_S   = 1.0 - _NT        # content ceiling = 0.90
+_CW  = 1.0 - 2 * _M    # content width   = 0.88
 
-_GLOBE_BOT  = 0.510
-_GLOBE_H    = 0.440
-_GLOBE_AX   = (0.0, _GLOBE_BOT, 1.0, _GLOBE_H)
+_TITLE_AX   = [_M,    0.957 * _S, _CW,  0.040 * _S]
 
-_MAP_BOT    = 0.255
-_MAP_H      = 0.250
-_MAP_AX     = (0.0, _MAP_BOT, 1.0, _MAP_H)
+_GLOBE_BOT  = 0.510 * _S
+_GLOBE_H    = 0.440 * _S
+_GLOBE_AX   = (0.0,  _GLOBE_BOT,  1.0,  _GLOBE_H)
 
-_HBAR_AX    = [0.03, 0.197, 0.94, 0.053]
-_LEGEND_AX  = [0.03, 0.005, 0.42, 0.187]   # LEFT  — color key
-_COUNTRY_AX = [0.50, 0.005, 0.47, 0.187]   # RIGHT — 4-card country grid
+_MAP_BOT    = 0.255 * _S
+_MAP_H      = 0.250 * _S
+_MAP_AX     = (0.0,  _MAP_BOT,    1.0,  _MAP_H)
+
+_HBAR_AX    = [_M,    0.197 * _S, _CW,  0.053 * _S]
+_LEGEND_AX  = [_M,    0.005,      0.36, 0.187 * _S]   # LEFT  — color key
+_COUNTRY_AX = [0.55,  0.005,      0.39, 0.187 * _S]   # RIGHT — 4-card country grid
 
 # Pixel rows for PIL glow
 GLOBE_TOP_PX = int((1.0 - (_GLOBE_BOT + _GLOBE_H)) * FIG_H_PX)
@@ -72,14 +80,14 @@ NAME_MAP = {
 
 EMOTION_ROW_ORDER = ["fear", "anger", "sadness", "anxiety", "hope", "joy"]
 
-# Neon border colors — six maximally distinct hues (red/orange/yellow/green/blue/violet)
+# Neon border colors — six maximally distinct hues (red/yellow/blue/violet/white/green)
 NEON = {
-    "fear":    "#FF2222",   # vivid red
-    "anger":   "#FF7700",   # orange  (clearly between red and yellow)
+    "fear":    "#FF1111",   # vivid red
+    "anger":   "#FFDD00",   # yellow  (clearly distinct from red)
     "sadness": "#3388FF",   # sky blue
     "anxiety": "#CC33FF",   # violet
-    "hope":    "#00EE77",   # green
-    "joy":     "#FFEE00",   # yellow
+    "hope":    "#F0F0FF",   # near-white
+    "joy":     "#00EE55",   # green
 }
 
 
@@ -208,15 +216,26 @@ def _apply_glow(image_path):
     arr = np.array(img, dtype=np.float32) / 255.0
     arr[GLOBE_TOP_PX:GLOBE_BOT_PX] = _glow_region(arr, GLOBE_TOP_PX, GLOBE_BOT_PX,
                                                     blur_radius=14, bloom=0.50)
-    arr[MAP_TOP_PX:MAP_BOT_PX]     = _glow_region(arr, MAP_TOP_PX,   MAP_BOT_PX,
-                                                    blur_radius=8,  bloom=0.40)
     Image.fromarray((np.clip(arr, 0, 1) * 255).astype(np.uint8)).save(image_path)
 
 
 # ── Drawing helpers ───────────────────────────────────────────────────────────
 
 
-def _draw_country_info(ax, states, news_positive=None, news_negative=None):
+_SCROLL_VISIBLE = 4   # entries shown at once per column
+_SCROLL_SPEED   = 5   # ticks between each scroll step
+
+def _rolling_window(items, tick):
+    """Return a visible window of _SCROLL_VISIBLE items, scrolling with tick."""
+    if not items:
+        return []
+    if len(items) <= _SCROLL_VISIBLE:
+        return list(items)
+    offset = (tick // _SCROLL_SPEED) % len(items)
+    return [items[(offset + i) % len(items)] for i in range(_SCROLL_VISIBLE)]
+
+
+def _draw_country_info(ax, states, news_positive=(), news_negative=(), tick=0):
     ax.axis("off");  ax.set_xlim(0, 1);  ax.set_ylim(0, 1)
     _cs = {c: (states[c]["joy"] * 0.55 + states[c]["hope"] * 0.45
                - states[c]["fear"] * 0.30 - states[c]["sadness"] * 0.20
@@ -227,29 +246,46 @@ def _draw_country_info(ax, states, news_positive=None, news_negative=None):
     _sn   = lambda nm: nm if len(nm) <= 13 else nm[:12] + "\u2026"
     _pct  = lambda s: f"{int((s + 1) / 2 * 100)}/100"
 
-    # 2×2 card grid — no bars, just label / name / score
-    cards = [
-        ("HIGHEST WELLBEING", best,           "#22c55e", _pct(_cs[best]),  0.00, 0.52),
-        ("MOST DISTRESSED",   worst,          "#ef4444", _pct(_cs[worst]), 0.52, 0.52),
-        ("+ NEWS IMPACT",     news_positive,  "#60a5fa", None,             0.00, 0.02),
-        ("-  NEWS IMPACT",    news_negative,  "#fb923c", None,             0.52, 0.02),
-    ]
-    for label, country, color, score, xc, yb in cards:
-        ax.text(xc, yb + 0.46, label,
-                color="#475569", fontsize=6.0, fontweight="bold", va="bottom")
-        name_str = _sn(country) if country else "\u2014"
-        name_col = color if country else "#334155"
-        ax.text(xc, yb + 0.26, name_str,
-                color=name_col, fontsize=8.5, fontweight="bold", va="bottom")
-        if score is not None and country:
-            ax.text(xc, yb + 0.06, score,
-                    color=color, fontsize=6.5, va="bottom", alpha=0.75)
+    # Top half — single best/worst country
+    for label, country, color, xc in [
+        ("HIGHEST WELLBEING", best,  "#22c55e", 0.00),
+        ("MOST DISTRESSED",   worst, "#ef4444", 0.52),
+    ]:
+        ax.text(xc, 0.98, label, color="#94a3b8", fontsize=8.0, fontweight="bold", va="top")
+        ax.text(xc, 0.83, _sn(country), color=color, fontsize=9.5, fontweight="bold", va="top")
+        ax.text(xc, 0.68, _pct(_cs[country]), color=color, fontsize=8.0, va="top", alpha=0.85)
+
+    ax.plot([0, 1], [0.64, 0.64], color="#1e293b", lw=0.6, alpha=0.7)
+
+    # Bottom half — rolling news impact lists
+    pos_list = list(news_positive)
+    neg_list = list(news_negative)
+    pos_view = _rolling_window(pos_list, tick)
+    neg_view = _rolling_window(neg_list, tick)
+
+    # headers with count
+    pos_label = f"+ NEWS IMPACT ({len(pos_list)})" if pos_list else "+ NEWS IMPACT"
+    neg_label = f"-  NEWS IMPACT ({len(neg_list)})" if neg_list else "-  NEWS IMPACT"
+    ax.text(0.00, 0.62, pos_label, color="#94a3b8", fontsize=8.0, fontweight="bold", va="top")
+    ax.text(0.52, 0.62, neg_label, color="#94a3b8", fontsize=8.0, fontweight="bold", va="top")
+
+    row_step = 0.54 / _SCROLL_VISIBLE
+
+    for i, name in enumerate(pos_view):
+        ax.text(0.00, 0.54 - i * row_step, _sn(name), color="#60a5fa", fontsize=8.5, va="top")
+    if not pos_view:
+        ax.text(0.00, 0.52, "\u2014", color="#334155", fontsize=9, va="top")
+
+    for i, name in enumerate(neg_view):
+        ax.text(0.52, 0.54 - i * row_step, _sn(name), color="#fb923c", fontsize=8.5, va="top")
+    if not neg_view:
+        ax.text(0.52, 0.52, "\u2014", color="#334155", fontsize=9, va="top")
 
 
 def _draw_color_legend(ax):
     ax.axis("off");  ax.set_xlim(0, 1);  ax.set_ylim(0, 1)
     ax.text(0.0, 0.97, "BORDER COLORS",
-            color="#475569", fontsize=8, fontweight="bold", va="top")
+            color="#94a3b8", fontsize=10, fontweight="bold", va="top")
     n       = len(EMOTION_ROW_ORDER)
     row_top = 0.86
     row_h   = row_top / n
@@ -261,7 +297,7 @@ def _draw_color_legend(ax):
             facecolor=color, edgecolor="none", alpha=0.85
         ))
         ax.text(0.14, yc, EMOTIONS[emo_key]["label"],
-                color="#94a3b8", fontsize=10, va="center", fontweight="bold")
+                color="#e2e8f0", fontsize=10, va="center", fontweight="bold")
 
 
 def _draw_flat_map(ax_map, states):
@@ -355,7 +391,7 @@ def _draw_flat_map(ax_map, states):
 
 def render_frame(states, day, happiness_history, news_log,
                  central_lon=0.0, central_lat=20.0, save_path=None,
-                 news_positive=None, news_negative=None):
+                 news_positive=(), news_negative=(), apply_glow=True):
     day_num = day // 24
     hour    = day % 24
 
@@ -374,21 +410,26 @@ def render_frame(states, day, happiness_history, news_log,
         for sp in ax.spines.values():
             sp.set_edgecolor("#1e293b")
 
-    # ── HEADLINE HEADER ───────────────────────────────────────────────────────
+    # ── HEADER: day/time + scrolling ticker ───────────────────────────────────
     ax_title.axis("off");  ax_title.set_xlim(0, 1);  ax_title.set_ylim(0, 1)
-    headline = ""
-    for entry in news_log:                  # prepended → newest first
-        if entry["day"] <= day:
-            headline = entry["headline"]
-            break
-    if not headline and news_log:
-        headline = news_log[0]["headline"]
-    display = (headline[:65] + "\u2026") if len(headline) > 65 else headline
-    ax_title.text(0.0, 0.55, display,
-                  color="#94a3b8", fontsize=7.5, va="center", style="italic",
-                  clip_on=True)
-    ax_title.text(1.0, 0.55, f"Day {day_num}  \u00b7  {hour:02d}:00",
-                  color="#475569", fontsize=6.5, va="center", ha="right")
+    ax_title.patch.set_visible(True);  ax_title.patch.set_facecolor(BG)
+
+    # Day / time — large, always visible, right-aligned
+    ax_title.text(1.0, 0.88, f"Day {day_num}  \u00b7  {hour:02d}:00",
+                  color="#e2e8f0", fontsize=9.5, fontweight="bold",
+                  va="top", ha="right")
+
+    # Build ticker from all headlines (newest first, separated by  ·)
+    ticker_text = "  \u00b7  ".join(e["headline"] for e in news_log) if news_log else ""
+    if ticker_text:
+        _TICKER_SPEED = 0.045          # axes-units per tick
+        _CHAR_W       = 0.0064         # approx axes-unit width per char
+        _cycle = max(1, int((1.05 + len(ticker_text) * _CHAR_W) / _TICKER_SPEED) + 1)
+        x_ticker = 1.05 - (day % _cycle) * _TICKER_SPEED
+        txt = ax_title.text(x_ticker, 0.08, ticker_text,
+                            color="#94a3b8", fontsize=9.0, va="bottom",
+                            ha="left", style="italic")
+        txt.set_clip_path(ax_title.patch)
 
     # ── GLOBE ─────────────────────────────────────────────────────────────────
     ax_globe.set_facecolor(BG)
@@ -414,14 +455,33 @@ def render_frame(states, day, happiness_history, news_log,
         ax_globe.add_geometries([world.iloc[idx].geometry], crs=SRC_CRS,
                                 facecolor=color, edgecolor="none",
                                 alpha=0.13, zorder=2)
-    for idx, color in zip(tracked_idx, neon_colors):
-        ax_globe.add_geometries([world.iloc[idx].geometry], crs=SRC_CRS,
-                                facecolor="none", edgecolor=color,
-                                linewidth=4.5, alpha=0.18, zorder=3)
-    for idx, color in zip(tracked_idx, neon_colors):
-        ax_globe.add_geometries([world.iloc[idx].geometry], crs=SRC_CRS,
-                                facecolor="none", edgecolor=color,
-                                linewidth=0.9, alpha=0.90, zorder=4)
+
+    # Neon borders — project rings once and batch into two LineCollections
+    halo_segs, halo_nc = [], []
+    core_segs, core_nc = [], []
+    for idx, nc in zip(tracked_idx, neon_colors):
+        for ring in COUNTRY_RINGS.get(world.iloc[idx]["NAME"], []):
+            try:
+                pp  = proj.transform_points(SRC_CRS, ring[:, 0], ring[:, 1])
+                cur = []
+                for pt in pp:
+                    if np.isnan(pt[0]) or np.isnan(pt[1]):
+                        if len(cur) >= 2:
+                            halo_segs.append(np.array(cur));  halo_nc.append(nc)
+                            core_segs.append(np.array(cur));  core_nc.append(nc)
+                        cur = []
+                    else:
+                        cur.append(pt[:2].tolist())
+                if len(cur) >= 2:
+                    halo_segs.append(np.array(cur));  halo_nc.append(nc)
+                    core_segs.append(np.array(cur));  core_nc.append(nc)
+            except Exception:
+                continue
+    if halo_segs:
+        ax_globe.add_collection(LineCollection(
+            halo_segs, colors=halo_nc, linewidths=4.5, alpha=0.18, zorder=3))
+        ax_globe.add_collection(LineCollection(
+            core_segs, colors=core_nc, linewidths=0.9, alpha=0.90, zorder=4))
 
     try:
         ax_globe.spines["geo"].set_edgecolor("#2a5a8c")
@@ -478,7 +538,7 @@ def render_frame(states, day, happiness_history, news_log,
     score   = int(fill * 100)
     h_color = "#22c55e" if h_val >= 0 else "#ef4444"
     ax_hbar.text(0.00, 0.88, "WORLD HAPPINESS INDEX",
-                 color="#475569", fontsize=7.5, fontweight="bold", va="center")
+                 color="#94a3b8", fontsize=9.5, fontweight="bold", va="center")
     ax_hbar.text(1.00, 0.88, f"{score} / 100",
                  color=h_color, fontsize=8.0, fontweight="bold", va="center", ha="right")
     ax_hbar.add_patch(mpatches.Rectangle(
@@ -491,13 +551,14 @@ def render_frame(states, day, happiness_history, news_log,
 
     # ── COLOR LEGEND (left) + COUNTRY CARDS (right) ───────────────────────────
     _draw_color_legend(ax_legend)
-    _draw_country_info(ax_country, states, news_positive, news_negative)
+    _draw_country_info(ax_country, states, news_positive, news_negative, tick=day)
 
     # ── SAVE + GLOW ───────────────────────────────────────────────────────────
     if save_path:
         plt.savefig(save_path, dpi=DPI, facecolor=BG)
         plt.close(fig)
-        _apply_glow(save_path)
+        if apply_glow:
+            _apply_glow(save_path)
     else:
         plt.show()
         plt.close(fig)

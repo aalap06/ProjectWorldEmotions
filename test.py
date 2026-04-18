@@ -84,8 +84,10 @@ def main():
 
         frame_path = os.path.join(FRAMES_DIR, f"frame_{i:04d}.png")
         render_frame(current_states, i, happiness_history, news_log,
-                     central_lon=lon, save_path=frame_path,
-                     news_positive="Australia", news_negative="Ukraine")
+                     central_lon=lon, save_path=frame_path, apply_glow=False,
+                     news_positive=["Australia", "India", "Brazil"],
+                     news_negative=["Ukraine", "Afghanistan", "Russia",
+                                    "China", "Germany"])
         print(f"  [{i + 1:2d}/{TOTAL_FRAMES}]  lon={lon:6.1f}°  "
               f"happiness={happiness_history[-1]:.3f}", end="\r")
 
