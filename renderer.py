@@ -310,8 +310,8 @@ def _draw_flat_map(ax_map, states):
     for _lon in range(-180, 181, 30):
         ax_map.plot([_lon, _lon], [-60, 85], color="#111111", lw=0.4, alpha=0.9, zorder=1)
 
-    world.plot(ax=ax_map, color="none", edgecolor="#1a3a5c",
-               linewidth=0.35, alpha=0.55, aspect="auto", zorder=2)
+    world.plot(ax=ax_map, color="none", edgecolor="#2a6aaa",
+               linewidth=0.8, alpha=0.85, aspect="auto", zorder=2)
     ax_map.set_xlim(-180, 180);  ax_map.set_ylim(-60, 85)
 
     tracked_idx, blend_colors, neon_colors = [], [], []
@@ -367,7 +367,7 @@ def _draw_flat_map(ax_map, states):
         ax_map.scatter(
             np.concatenate(xs_list), np.concatenate(ys_list),
             c=np.concatenate(colors_list),
-            s=DOT_SIZE * 0.65, alpha=0.75, zorder=6, linewidths=0)
+            s=DOT_SIZE * 0.25, alpha=0.75, zorder=6, linewidths=0)
 
     ax_map.axis("off")
 
