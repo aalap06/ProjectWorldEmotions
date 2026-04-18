@@ -27,7 +27,7 @@ import geopandas as gpd
 
 # ── Figure ────────────────────────────────────────────────────────────────────
 FIG_W_IN, FIG_H_IN = 6, 10.667
-DPI      = 120
+DPI      = 180
 FIG_W_PX = int(FIG_W_IN * DPI)   # 720
 FIG_H_PX = int(FIG_H_IN * DPI)   # 1280
 
@@ -331,21 +331,6 @@ def _draw_flat_map(ax_map, states):
             ax=ax_map, color=blend_colors, edgecolor="none",
             linewidth=0, aspect="auto", alpha=0.10, zorder=3)
         ax_map.set_xlim(-180, 180);  ax_map.set_ylim(-60, 85)
-
-    halo_rings, halo_colors = [], []
-    core_rings, core_colors = [], []
-    for idx, nc in zip(tracked_idx, neon_colors):
-        for ring in COUNTRY_RINGS.get(world.iloc[idx]["NAME"], []):
-            halo_rings.append(ring);  halo_colors.append(nc)
-            core_rings.append(ring);  core_colors.append(nc)
-
-    if halo_rings:
-        ax_map.add_collection(LineCollection(
-            halo_rings, colors=halo_colors,
-            linewidths=4.5, alpha=0.18, zorder=4, capstyle="round", joinstyle="round"))
-        ax_map.add_collection(LineCollection(
-            core_rings, colors=core_colors,
-            linewidths=0.9, alpha=0.92, zorder=5, capstyle="round", joinstyle="round"))
 
     xs_list, ys_list, colors_list = [], [], []
     for _, row in world.iterrows():
