@@ -27,10 +27,16 @@ def _render_worker(args):
 #  CONFIGURATION
 # ─────────────────────────────────────────────
 
-INTRO_FRAMES     = 10     # 1s hold before reaction
-ANIMATION_FRAMES = 240    # full 360° rotation — smooth at 1.5°/frame
-OUTRO_FRAMES     = 20     # 2s hold on final frame
-FPS              = 10
+# INTRO_FRAMES     = 10     # 1s hold before reaction
+# ANIMATION_FRAMES = 240    # full 360° rotation — smooth at 1.5°/frame
+# OUTRO_FRAMES     = 20     # 2s hold on final frame
+# FPS              = 10
+
+INTRO_FRAMES     = 15    # 0.5s hold
+ANIMATION_FRAMES = 570   # 19s rotation
+OUTRO_FRAMES     = 15    # 0.5s hold
+FPS              = 30
+
 TOTAL_ROTATION   = 360.0  # full globe rotation per headline
 FRAMES_DIR       = "frames"
 OUTPUT_VIDEO     = "world_emotion.mp4"

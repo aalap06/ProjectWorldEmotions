@@ -37,26 +37,30 @@ SRC_CRS  = ccrs.PlateCarree()
 
 # ── Layout ────────────────────────────────────────────────────────────────────
 # Instagram Reels safe zones:
-#   _NT  = 10% top    (notch + Reels header UI)
-#   _M   = 6%  sides  (rounded corners + Instagram side UI)
-_NT  = 0.10
+#   _NT  = 5% top     (notch + Reels header UI)
+#   _NB  = 5% bottom  (home bar / navigation UI)
+#   _M   = 6% sides   (rounded corners + Instagram side UI)
+_NT  = 0.05
+_NB  = 0.05
 _M   = 0.06
-_S   = 1.0 - _NT        # content ceiling = 0.90
+_S   = 1.0 - _NT        # content ceiling = 0.95
+_CH  = _S - _NB         # content height  = 0.90
 _CW  = 1.0 - 2 * _M    # content width   = 0.88
 
-_TITLE_AX   = [_M,    0.957 * _S, _CW,  0.040 * _S]
+_TITLE_AX   = [_M,    _NB + 0.957 * _CH, _CW,  0.040 * _CH]
 
-_GLOBE_BOT  = 0.510 * _S
-_GLOBE_H    = 0.440 * _S
+_GLOBE_BOT  = _NB + 0.510 * _CH
+_GLOBE_H    = 0.440 * _CH
 _GLOBE_AX   = (0.0,  _GLOBE_BOT,  1.0,  _GLOBE_H)
 
-_MAP_BOT    = 0.255 * _S
-_MAP_H      = 0.250 * _S
+_MAP_BOT    = _NB + 0.255 * _CH
+_MAP_H      = 0.250 * _CH
 _MAP_AX     = (0.0,  _MAP_BOT,    1.0,  _MAP_H)
 
-_HBAR_AX    = [_M,    0.197 * _S, _CW,  0.053 * _S]
-_LEGEND_AX  = [_M,    0.005,      0.36, 0.187 * _S]   # LEFT  — color key
-_COUNTRY_AX = [0.55,  0.005,      0.39, 0.187 * _S]   # RIGHT — 4-card country grid
+_HBAR_AX    = [_M,    _NB + 0.197 * _CH, _CW,  0.053 * _CH]
+_COUNTRY_X  = 0.43
+_LEGEND_AX  = [_M,         _NB, 0.36,                0.187 * _CH]   # LEFT  — color key
+_COUNTRY_AX = [_COUNTRY_X, _NB, _M + _CW - _COUNTRY_X, 0.187 * _CH]  # RIGHT — right edge = hbar right edge
 
 # Pixel rows for PIL glow
 GLOBE_TOP_PX = int((1.0 - (_GLOBE_BOT + _GLOBE_H)) * FIG_H_PX)
@@ -246,14 +250,14 @@ def _draw_country_info(ax, states, news_positive=(), news_negative=(), tick=0):
     _sn   = lambda nm: nm if len(nm) <= 13 else nm[:12] + "\u2026"
     _pct  = lambda s: f"{int((s + 1) / 2 * 100)}/100"
 
-    # Top half — single best/worst country
+    # Top half — two left-aligned columns
     for label, country, color, xc in [
         ("HIGHEST WELLBEING", best,  "#22c55e", 0.00),
-        ("MOST DISTRESSED",   worst, "#ef4444", 0.52),
+        ("MOST DISTRESSED",   worst, "#ef4444", 0.51),
     ]:
-        ax.text(xc, 0.98, label, color="#94a3b8", fontsize=8.0, fontweight="bold", va="top")
-        ax.text(xc, 0.83, _sn(country), color=color, fontsize=9.5, fontweight="bold", va="top")
-        ax.text(xc, 0.68, _pct(_cs[country]), color=color, fontsize=8.0, va="top", alpha=0.85)
+        ax.text(xc, 0.98, label,               color="#94a3b8", fontsize=9.0, fontweight="bold", va="top")
+        ax.text(xc, 0.88, _sn(country),        color=color,     fontsize=9.5, fontweight="bold", va="top")
+        ax.text(xc, 0.79, _pct(_cs[country]),  color=color,     fontsize=8.0, va="top", alpha=0.85)
 
     ax.plot([0, 1], [0.64, 0.64], color="#1e293b", lw=0.6, alpha=0.7)
 
@@ -263,41 +267,46 @@ def _draw_country_info(ax, states, news_positive=(), news_negative=(), tick=0):
     pos_view = _rolling_window(pos_list, tick)
     neg_view = _rolling_window(neg_list, tick)
 
-    # headers with count
     pos_label = f"+ NEWS IMPACT ({len(pos_list)})" if pos_list else "+ NEWS IMPACT"
     neg_label = f"-  NEWS IMPACT ({len(neg_list)})" if neg_list else "-  NEWS IMPACT"
-    ax.text(0.00, 0.62, pos_label, color="#94a3b8", fontsize=8.0, fontweight="bold", va="top")
-    ax.text(0.52, 0.62, neg_label, color="#94a3b8", fontsize=8.0, fontweight="bold", va="top")
+    ax.text(0.00, 0.62, pos_label, color="#94a3b8", fontsize=9.0, fontweight="bold", va="top")
+    ax.text(0.51, 0.62, neg_label, color="#94a3b8", fontsize=9.0, fontweight="bold", va="top")
 
-    row_step = 0.54 / _SCROLL_VISIBLE
+    _list_top = 0.52               # same 0.10 gap below title as HIGHEST WELLBEING → Finland
+    row_step  = _list_top / _SCROLL_VISIBLE
 
     for i, name in enumerate(pos_view):
-        ax.text(0.00, 0.54 - i * row_step, _sn(name), color="#60a5fa", fontsize=8.5, va="top")
+        ax.text(0.00, _list_top - i * row_step, _sn(name), color="#60a5fa", fontsize=8.5, va="top")
     if not pos_view:
-        ax.text(0.00, 0.52, "\u2014", color="#334155", fontsize=9, va="top")
+        ax.text(0.00, _list_top, "\u2014", color="#334155", fontsize=9, va="top")
 
     for i, name in enumerate(neg_view):
-        ax.text(0.52, 0.54 - i * row_step, _sn(name), color="#fb923c", fontsize=8.5, va="top")
+        ax.text(0.51, _list_top - i * row_step, _sn(name), color="#fb923c", fontsize=8.5, va="top")
     if not neg_view:
-        ax.text(0.52, 0.52, "\u2014", color="#334155", fontsize=9, va="top")
+        ax.text(0.51, _list_top, "\u2014", color="#334155", fontsize=9, va="top")
 
 
 def _draw_color_legend(ax):
     ax.axis("off");  ax.set_xlim(0, 1);  ax.set_ylim(0, 1)
     ax.text(0.0, 0.97, "BORDER COLORS",
-            color="#94a3b8", fontsize=10, fontweight="bold", va="top")
-    n       = len(EMOTION_ROW_ORDER)
-    row_top = 0.86
-    row_h   = row_top / n
-    for i, emo_key in enumerate(EMOTION_ROW_ORDER):
-        yc    = row_top - (i + 0.5) * row_h
-        color = NEON[emo_key]
-        ax.add_patch(mpatches.Rectangle(
-            (0.0, yc - 0.040), 0.09, 0.080,
-            facecolor=color, edgecolor="none", alpha=0.85
-        ))
-        ax.text(0.14, yc, EMOTIONS[emo_key]["label"],
-                color="#e2e8f0", fontsize=10, va="center", fontweight="bold")
+            color="#94a3b8", fontsize=9.0, fontweight="bold", va="top")
+    # 2 columns × 3 rows: left = Fear/Anger/Sadness, right = Joy/Hope/Anxiety
+    left_col  = ["fear",  "anger",   "sadness"]
+    right_col = ["joy",   "hope",    "anxiety"]
+    row_top   = 0.84
+    row_h     = 0.18          # tighter vertical spacing
+    for col_idx, col_keys in enumerate([left_col, right_col]):
+        x_box   = 0.0  if col_idx == 0 else 0.50
+        x_label = 0.20 if col_idx == 0 else 0.70
+        for row_idx, emo_key in enumerate(col_keys):
+            yc    = row_top - (row_idx + 0.5) * row_h
+            color = NEON[emo_key]
+            ax.add_patch(mpatches.Rectangle(
+                (x_box, yc - 0.040), 0.17, 0.080,
+                facecolor=color, edgecolor="none", alpha=0.85
+            ))
+            ax.text(x_label, yc, EMOTIONS[emo_key]["label"],
+                    color="#e2e8f0", fontsize=9.0, va="center", fontweight="bold")
 
 
 def _draw_flat_map(ax_map, states):
@@ -411,17 +420,18 @@ def render_frame(states, day, happiness_history, news_log,
     ax_title.patch.set_visible(True);  ax_title.patch.set_facecolor(BG)
 
     # Day / time — large, always visible, right-aligned
-    ax_title.text(1.0, 0.88, f"Day {day_num}  \u00b7  {hour:02d}:00",
-                  color="#e2e8f0", fontsize=9.5, fontweight="bold",
-                  va="top", ha="right")
+    ax_title.text(0.5, 0.88, f"Day {day_num}  \u00b7  {hour:02d}:00",
+                  color="#e2e8f0", fontsize=13, fontweight="bold",
+                  va="top", ha="center")
 
     # Build ticker from all headlines (newest first, separated by  ·)
     ticker_text = "  \u00b7  ".join(e["headline"] for e in news_log) if news_log else ""
     if ticker_text:
         _TICKER_SPEED = 0.045          # axes-units per tick
         _CHAR_W       = 0.0064         # approx axes-unit width per char
-        _cycle = max(1, int((1.05 + len(ticker_text) * _CHAR_W) / _TICKER_SPEED) + 1)
-        x_ticker = 1.05 - (day % _cycle) * _TICKER_SPEED
+        _text_w = len(ticker_text) * _CHAR_W
+        _cycle  = max(1, int((_text_w + 0.05) / _TICKER_SPEED) + 1)
+        x_ticker = -(day % _cycle) * _TICKER_SPEED  # starts at 0 (visible), scrolls left
         txt = ax_title.text(x_ticker, 0.08, ticker_text,
                             color="#94a3b8", fontsize=9.0, va="bottom",
                             ha="left", style="italic")
@@ -530,13 +540,19 @@ def render_frame(states, day, happiness_history, news_log,
     # ── HAPPINESS BAR ─────────────────────────────────────────────────────────
     ax_hbar.axis("off");  ax_hbar.set_xlim(0, 1);  ax_hbar.set_ylim(0, 1)
     h_val   = happiness_history[-1] if happiness_history else 0.0
+    h_start = happiness_history[0]  if happiness_history else 0.0
     fill    = (h_val + 1) / 2
     score   = int(fill * 100)
+    delta   = score - int(((h_start + 1) / 2) * 100)
     h_color = "#22c55e" if h_val >= 0 else "#ef4444"
     ax_hbar.text(0.00, 0.88, "WORLD HAPPINESS INDEX",
                  color="#94a3b8", fontsize=9.5, fontweight="bold", va="center")
-    ax_hbar.text(1.00, 0.88, f"{score} / 100",
-                 color=h_color, fontsize=8.0, fontweight="bold", va="center", ha="right")
+    ax_hbar.text(0.50, 0.88, f"{score} / 100",
+                 color=h_color, fontsize=8.0, fontweight="bold", va="center", ha="center")
+    d_str   = f"(+{delta})" if delta >= 0 else f"({delta})"
+    d_color = "#22c55e"  if delta > 0 else ("#ef4444" if delta < 0 else "#64748b")
+    ax_hbar.text(0.63, 0.88, d_str,
+                 color=d_color, fontsize=8.0, fontweight="bold", va="center", ha="left")
     ax_hbar.add_patch(mpatches.Rectangle(
         (0.0, 0.10), 1.0, 0.38, facecolor="#0f1a2e", edgecolor="#1e3a5c", linewidth=0.6))
     if fill > 0.01:
